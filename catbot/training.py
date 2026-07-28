@@ -37,6 +37,62 @@ def compute_reward(state: int, next_state: int, caught: bool, gamma: float) -> f
     return STEP_PENALTY + SHAPING_SCALE * shaping
 
 
+from typing import List, Tuple
+
+# Cats we have specs for, plus the trainer sandbox
+KNOWN_CATS = ["batmeow", "mittens", "paotsin", "peekaboo", "squiddyboi", "trainer"]
+
+def greedy_rollout(env, q_table) -> Tuple[bool, int]:
+    """Play one episode greedily, no exploration and no rendering. Returns
+    whether the cat was caught and how many moves it took.
+    """
+    max_steps = 60
+    state, _ = env.reset()
+    for step in range(1, max_steps + 1):
+        action = int(np.argmax(q_table[state]))
+        state, _, terminated, truncated, _ = env.step(action)
+        if terminated:
+            return True, step
+        if truncated:
+            break
+    return False, max_steps
+
+def evaluate(cat_name, q_table, trials: int) -> Tuple[float, float]:
+    """Run a bunch of greedy games and average them.
+    """
+    env = make_env(cat_type=cat_name)
+    catches = 0
+    steps_when_caught: List[int] = []
+
+    for _ in range(trials):
+        caught, steps = greedy_rollout(env, q_table)
+        if caught:
+            catches += 1
+            steps_when_caught.append(steps)
+
+    env.close()
+
+    success_rate = catches / trials
+    avg_steps = float(np.mean(steps_when_caught)) if steps_when_caught else float("nan")
+    return success_rate, avg_steps
+
+def evaluate_all(trials: int = 30):
+    """Train on every known cat with the current train_bot config then report
+    how often the bot catches each one and how many moves it takes.
+    """
+    total_rate = 0.0
+    for cat in KNOWN_CATS:
+        q_table = train_bot(cat_name=cat)
+        rate, steps = evaluate(cat, q_table, trials)
+        total_rate += rate
+
+        s_str = f"{steps:5.2f}" if not np.isnan(steps) else "  -  "
+        print(f"{cat:<11} success={rate*100:5.1f}%   avg_steps={s_str}")
+
+    mean_rate = total_rate / len(KNOWN_CATS)
+    print(f"\nmean success rate across {len(KNOWN_CATS)} cats: {mean_rate*100:.1f}%")
+
+
 
 #############################################################################
 # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
@@ -73,13 +129,6 @@ def train_bot(cat_name, render: int = -1):
     n_actions = env.action_space.n
 
 
-
-
-
-
-
-
-    
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
     #############################################################################
@@ -123,39 +172,7 @@ def train_bot(cat_name, render: int = -1):
 
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        
+   
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
         #############################################################################
