@@ -9,10 +9,32 @@ from cat_env import make_env
 # TODO: YOU MAY ADD ADDITIONAL IMPORTS OR FUNCTIONS HERE.                   #
 #############################################################################
 
+# Reward values
+CATCH_REWARD = 100.0
+STEP_PENALTY = -1.0
+SHAPING_SCALE = 1.0
 
+def decode_state(state: int):
+    """State is bot_row*1000 + bot_col*100 + cat_row*10 + cat_col."""
+    return state // 1000, (state // 100) % 10, (state // 10) % 10, state % 10
 
+def manhattan(state: int) -> int:
+    """Distance between bot and cat."""
+    bot_r, bot_c, cat_r, cat_c = decode_state(state)
+    return abs(bot_r - cat_r) + abs(bot_c - cat_c)
 
+def compute_reward(state: int, next_state: int, caught: bool, gamma: float) -> float:
+    """Reward for one step. The env always returns 0, so we build it here.
 
+    Big bonus for catching, small penalty per step to keep chases short, plus
+    distance shaping. The shaping uses the gamma*phi(s') - phi(s) form, which
+    does not change the optimal policy, so it only speeds up learning.
+    """
+    if caught:
+        return CATCH_REWARD
+
+    shaping = gamma * -manhattan(next_state) - -manhattan(state)
+    return STEP_PENALTY + SHAPING_SCALE * shaping
 
 
 
@@ -38,9 +60,17 @@ def train_bot(cat_name, render: int = -1):
     # Hint: You may want to declare variables for the hyperparameters of the    #
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
-    
-    
 
+    alpha = 0.1             # learning rate
+    gamma = 0.95            # discount factor
+    epsilon = 1.0           # chance of taking a random action
+    epsilon_min = 0.05
+    epsilon_decay = 0.999   # applied after every episode
+
+    # Matches the 60-move limit the bot gets during evaluation.
+    max_steps = 60
+
+    n_actions = env.action_space.n
 
 
 
@@ -64,9 +94,36 @@ def train_bot(cat_name, render: int = -1):
         # 3. Take the action and observe the next state.                             #
         # 4. Since this environment doesn't give rewards, compute reward manually    #
         # 5. Update the Q-table accordingly based on agent's rewards.                #
-        ############################################################################## 
-               
-        
+        ##############################################################################
+
+        state, _ = env.reset()
+
+        for _ in range(max_steps):
+            # Explore or exploit
+            if random.random() < epsilon:
+                action = random.randrange(n_actions)
+            else:
+                action = int(np.argmax(q_table[state]))
+
+            next_state, _, terminated, truncated, _ = env.step(action)
+            reward = compute_reward(state, next_state, terminated, gamma)
+
+            # Q(s,a) <- Q(s,a) + alpha * (target - Q(s,a))
+            # Nothing to bootstrap from once the cat is caught.
+            if terminated:
+                target = reward
+            else:
+                target = reward + gamma * np.max(q_table[next_state])
+
+            q_table[state][action] += alpha * (target - q_table[state][action])
+            state = next_state
+
+            if terminated or truncated:
+                break
+
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+
+
 
 
 
