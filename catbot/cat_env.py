@@ -258,17 +258,133 @@ class TrainerCat(Cat):
     Helper methods:
     - self.player_moved_closer(): Returns True if player's last move decreased distance
     """
+
+    #   "pursuer"    - walks toward the bot (stalker-like), opposite of evader
+    #   "threshold"  - wanders aimlessly, but strategizes  when the bot gets within 3 squares
+    #   "warper"     - teleports to a random square every 5 steps
+    #   "evader"     - chooses the square thats farthest from the bot (runs away)
+    #   "teleporter" - jumps to a random edge square only when the bot is beside it
+    #   "still"      - does not move at all
+    
+    behavior = "pursuer"
+    FLEE_RANGE = 3      # for threshold behavior, distance at which the cat starts running away from the bot
+    WARP_PERIOD = 5     # for warper behavior, number of steps between warps
+    warp_counter = 0    # for warper behavior, counts steps to determine when to warp
+
     def _get_sprite_path(self) -> str:
         return "images/trainer-dp.png"
+
+    # ----------------------------------------------
+    # Helper methods for behavior movements
+    # ----------------------------------------------
+
+    def clamp(self, value):
+        # keeps the cat within the board's bounds
+        return min(max(value, 0), self.grid_size - 1)
+
+    def distance_to_bot(self, row, col):
+        # manhattan distance from the cat to the bot
+        return abs(row - self.player_pos[0]) + abs(col - self.player_pos[1])
+
+    def step_by(self, row_change, col_change):
+        self.pos[0] = self.clamp(self.pos[0] + row_change)
+        self.pos[1] = self.clamp(self.pos[1] + col_change)
+
+    def move_random(self):
+        # move one step random direction
+        moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        row_change, col_change = random.choice(moves)
+        self.step_by(row_change, col_change)
+
+    def move_away_or_toward(self, run_away):
+        """cat tries out all four directions and takes the best one.
+
+        If run_away is True the cat picks the square farthest from the bot,
+         else it picks the square closest to the bot.
+        """
+        moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        random.shuffle(moves)   
+
+        best_move = moves[0]
+        best_distance = None
+
+        for row_change, col_change in moves:
+            new_row = self.clamp(self.pos[0] + row_change)
+            new_col = self.clamp(self.pos[1] + col_change)
+            distance = self.distance_to_bot(new_row, new_col)
+
+            if best_distance is None:
+                better = True
+            elif run_away:
+                better = distance > best_distance
+            else:
+                better = distance < best_distance
+
+            if better:
+                best_move = (row_change, col_change)
+                best_distance = distance
+
+        self.step_by(best_move[0], best_move[1])
+
+    # ----------------------------------------------
+    # 5 added behaviors for testing
+    # ----------------------------------------------
+
+    def move_pursuer(self):
+        """Always walks toward the bot."""
+        self.move_away_or_toward(run_away=False)
+
+    def move_threshold(self):
+        """Ignores the bot until it gets close, then runs."""
+        if self.current_distance <= self.FLEE_RANGE:
+            self.move_away_or_toward(run_away=True)
+        else:
+            self.move_random()
+
+    def move_warper(self):
+
+        self.warp_counter += 1
+
+        if self.warp_counter % self.WARP_PERIOD == 0: # every 5 steps, jump to a random square
+            self.pos[0] = random.randrange(self.grid_size)
+            self.pos[1] = random.randrange(self.grid_size)
+
+    def move_evader(self):
+        self.move_away_or_toward(run_away=True)
+
+    def move_teleporter(self):
     
+        if self.current_distance != 1: # cat stays put if not adjacent to the bot
+            return
+        
+        edge_squares = [] # every square along the four edges
+        for i in range(self.grid_size):
+            edge_squares.append((0, i))
+            edge_squares.append((self.grid_size - 1, i))
+            edge_squares.append((i, 0))
+            edge_squares.append((i, self.grid_size - 1))
+
+
+        safe_squares = [] # from the edge squares, only keep those that are not adjacent to the bot
+        for row, col in edge_squares:
+            if self.distance_to_bot(row, col) > 1:
+                safe_squares.append((row, col))
+
+        if safe_squares:
+            self.pos[0], self.pos[1] = random.choice(safe_squares)
+
     def move(self) -> None:
-        # Students can implement their own cat behavior here
-        # This is a dummy implementation that stays still
-        # You can:
-        # 1. Access player information (position, last action)
-        # 2. Check distances
-        # 3. Implement your own movement strategy
-        # 4. Test different learning algorithms
+        if self.behavior == "pursuer":
+            self.move_pursuer()
+        elif self.behavior == "threshold":
+            self.move_threshold()
+        elif self.behavior  == "warper":
+            self.move_warper()
+        elif self.behavior == "evader":
+            self.move_evader()
+        elif self.behavior == "teleporter":
+            self.move_teleporter()
+        # "still" and anything else means the cat does not move
         return
 
 #######################################
