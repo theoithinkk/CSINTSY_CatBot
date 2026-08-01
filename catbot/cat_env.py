@@ -259,15 +259,28 @@ class TrainerCat(Cat):
     - self.player_moved_closer(): Returns True if player's last move decreased distance
     """
 
-    #   "pursuer"    - walks toward the bot (stalker-like), opposite of evader
-    #   "threshold"  - wanders aimlessly, but strategizes  when the bot gets within 3 squares
-    #   "warper"     - teleports to a random square every 5 steps
-    #   "evader"     - chooses the square thats farthest from the bot (runs away)
-    #   "teleporter" - jumps to a random edge square only when the bot is beside it
-    #   "still"      - does not move at all
-    
+    # Every behavior below is catchable. A cat that always takes the move
+    # maximizing its distance is impossible to catch here: the cat moves
+    # second, and a blocked move is clamped into a free "stay", so it can
+    # always end its turn at least 2 squares away. The graded cats avoid this
+    # by having a designed weakness (Paotsin only flees 65% of the time,
+    # Peekaboo will not teleport when cornered from one particular side), so
+    # these test cats each have one too.
+    #
+    #   "pursuer"   - walks toward the bot; sanity check, easiest cat
+    #   "warper"    - teleports to a random square every 5 steps
+    #   "skittish"  - flees only when the bot closed the distance last turn,
+    #                 otherwise wanders. Weakness: appeasement. Charging it
+    #                 head-on never works; holding still lets it drift closer.
+    #   "coward"    - flees optimally, but only 60% of the time; otherwise it
+    #                 freezes. Weakness: lapses, so patient cornering pays off.
+    #   "blindspot" - teleports to a random edge square when the bot is beside
+    #                 it, except when the bot is directly below it.
+    #                 Weakness: one safe approach direction, like Peekaboo.
+    #   "still"     - does not move at all
+
     behavior = "pursuer"
-    FLEE_RANGE = 3      # for threshold behavior, distance at which the cat starts running away from the bot
+    FLEE_CHANCE = 0.6   # for coward behavior, chance it actually runs away
     WARP_PERIOD = 5     # for warper behavior, number of steps between warps
     warp_counter = 0    # for warper behavior, counts steps to determine when to warp
 
@@ -334,9 +347,14 @@ class TrainerCat(Cat):
         """Always walks toward the bot."""
         self.move_away_or_toward(run_away=False)
 
-    def move_threshold(self):
-        """Ignores the bot until it gets close, then runs."""
-        if self.current_distance <= self.FLEE_RANGE:
+    def move_skittish(self):
+        """Runs only if the bot just closed the distance, otherwise wanders.
+
+        The bot cannot win by charging: every step toward this cat provokes a
+        step away. It has to break the chase, let the cat wander, and close in
+        on the turns the cat gives away for free.
+        """
+        if self.player_moved_closer():
             self.move_away_or_toward(run_away=True)
         else:
             self.move_random()
@@ -349,14 +367,25 @@ class TrainerCat(Cat):
             self.pos[0] = random.randrange(self.grid_size)
             self.pos[1] = random.randrange(self.grid_size)
 
-    def move_evader(self):
-        self.move_away_or_toward(run_away=True)
+    def move_coward(self):
+        """Flees optimally, but freezes 40% of the time.
 
-    def move_teleporter(self):
-    
+        A cat that always flees can never be caught, so this one lapses. The
+        bot has to keep the pressure on and take the openings when they come.
+        """
+        if random.random() < self.FLEE_CHANCE:
+            self.move_away_or_toward(run_away=True)
+
+    def move_blindspot(self):
+
         if self.current_distance != 1: # cat stays put if not adjacent to the bot
             return
-        
+
+        # The weak side: it will not flee from a bot standing directly below it.
+        if self.player_pos[0] == self.pos[0] + 1 and self.player_pos[1] == self.pos[1]:
+            return
+
+
         edge_squares = [] # every square along the four edges
         for i in range(self.grid_size):
             edge_squares.append((0, i))
@@ -376,14 +405,14 @@ class TrainerCat(Cat):
     def move(self) -> None:
         if self.behavior == "pursuer":
             self.move_pursuer()
-        elif self.behavior == "threshold":
-            self.move_threshold()
-        elif self.behavior  == "warper":
+        elif self.behavior == "skittish":
+            self.move_skittish()
+        elif self.behavior == "warper":
             self.move_warper()
-        elif self.behavior == "evader":
-            self.move_evader()
-        elif self.behavior == "teleporter":
-            self.move_teleporter()
+        elif self.behavior == "coward":
+            self.move_coward()
+        elif self.behavior == "blindspot":
+            self.move_blindspot()
         # "still" and anything else means the cat does not move
         return
 

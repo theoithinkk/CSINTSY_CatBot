@@ -1,5 +1,9 @@
 """
-DISREGARD: Only used for testing the added cat behaviors, to see if all cat moves are moving as intended.
+Development tool, not part of the deliverable. Traces a few steps of each
+TrainerCat behavior against a naive chase so we can eyeball whether the cat
+moves the way its docstring claims.
+
+To run: python check_trainer.py
 """
 import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -13,8 +17,8 @@ def dist(state):
     return abs(br - cr) + abs(bc - cc), (br, bc), (cr, cc)
 
 
-def run(behavior, steps=12):
-    cat_env.TrainerCat.BEHAVIOR = behavior
+def run(behavior, steps=30):
+    cat_env.TrainerCat.behavior = behavior
     env = make_env(cat_type="trainer")
     state, _ = env.reset()
 
@@ -39,5 +43,5 @@ def run(behavior, steps=12):
     env.close()
 
 
-for b in ["still", "pursuer", "threshold", "warper", "evader", "teleporter"]:
+for b in ["still", "pursuer", "skittish", "warper", "coward", "blindspot"]:
     run(b)
