@@ -11,11 +11,7 @@ from cat_env import make_env
 
 from typing import List, Tuple
 
-# The environment offers 5 actions (0:Up 1:Down 2:Left 3:Right 4:Stay), but its
-# action_space is declared as Discrete(4), so action_space.n would hide "Stay".
-# Staying put is what appeases a cat that flees whenever you close in, so we
-# hardcode 5. Passing action 4 to step() is handled correctly by the env: no
-# movement branch matches, the bot holds position, and the cat still moves.
+# Hardcoded 5 actions
 N_ACTIONS = 5
 
 # Reward values
@@ -43,7 +39,7 @@ def manhattan(state: int) -> int:
 GRID_SIZE = 8
 MOVES = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]  # up, down, left, right, stay
 
-# Weight of the prior below. Tiny on purpose: learned Q-values reach the
+# Weight of the prior below. Made to be small so learned Q-values reach the
 # hundreds, so this only decides states that training never visited.
 PRIOR_SCALE = 0.01
 
@@ -141,8 +137,7 @@ def train_bot(cat_name, render: int = -1):
     # Matches the 60-move limit the bot gets during evaluation.
     max_steps = 60
 
-    # Experience replay. The project caps episodes at 5000, not Q-table
-    # updates, and Q-learning is off-policy, so old transitions stay valid
+    # Experience replay. The project caps episodes at 5000 so old transitions stay valid
     # learning material. Replaying one extra update per step roughly doubles
     # how much we learn from the same 5000 episodes. Replaying three per step
     # was tested and made things worse: the stale transitions outweigh the
@@ -150,7 +145,7 @@ def train_bot(cat_name, render: int = -1):
     replay_buffer: List[Tuple[int, int, float, int, bool]] = []
     replay_ratio = 1
 
-    # Snapshot selection. Training occasionally ends on a bad policy: a run
+    # Snapshot selection. Training occasionally ends on a bad policy because a run
     # that was catching Peekaboo 30/30 at episode 3000 can finish at 0/30.
     # So we keep the Q-table every 1000 episodes and, at the end, hand back
     # whichever snapshot actually plays best. This spends extra environment
